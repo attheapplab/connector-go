@@ -3,7 +3,9 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -29,6 +31,15 @@ func (h Handler) Handle(method string, resource string, collection ...procedure)
 	}
 	h[method] = make(map[string][]procedure)
 	h.Handle(method, resource, collection...)
+}
+
+func (h Handler) ListenAndServe() {
+	port := os.Getenv("PORT")
+	if port != "" {
+		log.Printf("$PORT=%s\n", port)
+	}
+	log.Println("Listening...")
+	http.ListenAndServe(port, h)
 }
 
 func extractBody(r *http.Request) map[string]string {
