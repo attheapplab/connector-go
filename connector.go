@@ -22,9 +22,13 @@ type procedure interface {
 	Do(context.Context) context.Context
 }
 
-type Handler map[string]map[string][]procedure
+type handler map[string]map[string][]procedure
 
-func (h Handler) Handle(method string, resource string, collection ...procedure) {
+func NewHandler() *handler {
+	return &handler{}
+}
+
+func (h handler) Handle(method string, resource string, collection ...procedure) {
 	if routes, ok := h[method]; ok {
 		routes[resource] = collection
 		return
@@ -33,7 +37,7 @@ func (h Handler) Handle(method string, resource string, collection ...procedure)
 	h.Handle(method, resource, collection...)
 }
 
-func (h Handler) ListenAndServe() {
+func (h handler) ListenAndServe() {
 	port := os.Getenv("PORT")
 	if port != "" {
 		log.Printf("$PORT=%s\n", port)
@@ -81,6 +85,10 @@ func readResult(ctx context.Context) []byte {
 	return result
 }
 
+func logRequest(method string, resource string) {
+	log.Printf("[%s] %s\n", method, resource)
+}
+
 func parseRequest(r *http.Request) context.Context {
 	ctx := r.Context()
 	body := extractBody(r)
@@ -96,7 +104,13 @@ func parseRequest(r *http.Request) context.Context {
 	return ctx
 }
 
-func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func setHeaders(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
+	w.Header().Set("Content-Type", "application/json")
+}
+
+func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := extractMethod(r)
 	collections, ok := h[method]
 	if !ok {
@@ -109,10 +123,12 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
+	logRequest(method, resource)
 	ctx := parseRequest(r)
 	for _, procedure := range collection {
 		ctx = procedure.Do(ctx)
 	}
 	result := readResult(ctx)
+	setHeaders(w, r)
 	w.Write(result)
 }
