@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,15 +12,15 @@ import (
 
 const (
 	kbody = "body"
+	kcookies = "cookies"
 	kid = "id"
 	kmethod = "method"
 	kquery = "query"
 	kresource = "resource"
-	kresult = "result"
 )
 
 type procedure interface {
-	Do(context.Context) context.Context
+	Do(context.Context, http.ResponseWriter) context.Context
 }
 
 type handler map[string]map[string][]procedure
@@ -29,12 +30,13 @@ func NewHandler() *handler {
 }
 
 func (h handler) Handle(method string, resource string, collection ...procedure) {
-	if routes, ok := h[method]; ok {
-		routes[resource] = collection
+	routes, ok := h[method]
+	if !ok {
+		h[method] = make(map[string][]procedure)
+		h.Handle(method, resource, collection...)
 		return
 	}
-	h[method] = make(map[string][]procedure)
-	h.Handle(method, resource, collection...)
+	routes[resource] = collection
 }
 
 func (h handler) ListenAndServe() {
@@ -42,7 +44,7 @@ func (h handler) ListenAndServe() {
 	if port != "" {
 		log.Printf("$PORT=%s\n", port)
 	}
-	log.Println("Listening...")
+	fmt.Println("Listening...")
 	http.ListenAndServe(port, h)
 }
 
@@ -50,6 +52,14 @@ func extractBody(r *http.Request) map[string]string {
 	bodyParams := make(map[string]string)
 	json.NewDecoder(r.Body).Decode(&bodyParams)
 	return bodyParams
+}
+
+func extractCookies(r *http.Request) map[string]string {
+	cookies := make(map[string]string)
+	for _, cookie := range r.Cookies() {
+		cookies[cookie.Name] = cookie.Value
+	}
+	return cookies
 }
 
 func extractId(r *http.Request) string {
@@ -77,22 +87,12 @@ func extractResource(r *http.Request) string {
 	return strings.Split(r.URL.Path, "/")[1]
 }
 
-func readResult(ctx context.Context) []byte {
-	result, ok := ctx.Value(kresult).([]byte)
-	if !ok {
-		return []byte{}
-	}
-	return result
-}
-
-func logRequest(method string, resource string) {
-	log.Printf("[%s] %s\n", method, resource)
-}
-
 func parseRequest(r *http.Request) context.Context {
 	ctx := r.Context()
 	body := extractBody(r)
 	ctx = context.WithValue(ctx, kbody, body)
+	cookies := extractCookies(r)
+	ctx = context.WithValue(ctx, kcookies, cookies)
 	id := extractId(r)
 	ctx = context.WithValue(ctx, kid, id)
 	method := extractMethod(r)
@@ -104,7 +104,7 @@ func parseRequest(r *http.Request) context.Context {
 	return ctx
 }
 
-func setHeaders(w http.ResponseWriter, r *http.Request) {
+func setPreliminaryHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
 	w.Header().Set("Content-Type", "application/json")
@@ -123,12 +123,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	logRequest(method, resource)
+	setPreliminaryHeaders(w)
 	ctx := parseRequest(r)
 	for _, procedure := range collection {
-		ctx = procedure.Do(ctx)
+		ctx = procedure.Do(ctx, w)
 	}
-	result := readResult(ctx)
-	setHeaders(w, r)
-	w.Write(result)
 }
