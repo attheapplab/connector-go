@@ -13,7 +13,7 @@ import (
 const (
 	kbody = "body"
 	kcookies = "cookies"
-	kid = "id"
+	klocator = "locator"
 	kmethod = "method"
 	kquery = "query"
 	kresource = "resource"
@@ -62,7 +62,7 @@ func extractCookies(r *http.Request) map[string]string {
 	return cookies
 }
 
-func extractId(r *http.Request) string {
+func extractLocator(r *http.Request) string {
 	path := strings.Split(r.URL.Path, "/")
 	if len(path) < 3 {
 		return ""
@@ -87,14 +87,13 @@ func extractResource(r *http.Request) string {
 	return strings.Split(r.URL.Path, "/")[1]
 }
 
-func parseRequest(r *http.Request) context.Context {
-	ctx := r.Context()
+func parseRequest(ctx context.Context, r *http.Request) context.Context {
 	body := extractBody(r)
 	ctx = context.WithValue(ctx, kbody, body)
 	cookies := extractCookies(r)
 	ctx = context.WithValue(ctx, kcookies, cookies)
-	id := extractId(r)
-	ctx = context.WithValue(ctx, kid, id)
+	locator := extractLocator(r)
+	ctx = context.WithValue(ctx, klocator, locator)
 	method := extractMethod(r)
 	ctx = context.WithValue(ctx, kmethod, method)
 	query := extractQuery(r)
@@ -124,7 +123,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setPreliminaryHeaders(w)
-	ctx := parseRequest(r)
+	ctx := r.Context()
+	ctx = parseRequest(ctx, r)
 	for _, procedure := range collection {
 		ctx = procedure.Do(ctx, w)
 	}
