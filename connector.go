@@ -103,26 +103,29 @@ func parseRequest(ctx context.Context, r *http.Request) context.Context {
 	return ctx
 }
 
-func setPreliminaryHeaders(w http.ResponseWriter) {
+func setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Methods", "PATCH")
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := extractMethod(r)
+	resource := extractResource(r)
 	collections, ok := h[method]
-	if !ok {
+	if !ok && method == http.MethodOptions {
+		setCORSHeaders(w)
+		return
+	} else if !ok {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	resource := extractResource(r)
 	collection, ok := collections[resource]
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	setPreliminaryHeaders(w)
+	setCORSHeaders(w)
 	ctx := r.Context()
 	ctx = parseRequest(ctx, r)
 	for _, procedure := range collection {
