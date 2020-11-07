@@ -23,29 +23,29 @@ type procedure interface {
 	Do(context.Context, http.ResponseWriter) context.Context
 }
 
-type handler map[string]map[string][]procedure
+type connector map[string]map[string][]procedure
 
-func NewHandler() *handler {
-	return &handler{}
+func New() *connector {
+	return &connector{}
 }
 
-func (h handler) Handle(method string, resource string, collection ...procedure) {
-	routes, ok := h[method]
+func (c connector) Handle(method string, resource string, collection ...procedure) {
+	routes, ok := c[method]
 	if !ok {
-		h[method] = make(map[string][]procedure)
-		h.Handle(method, resource, collection...)
+		c[method] = make(map[string][]procedure)
+		c.Handle(method, resource, collection...)
 		return
 	}
 	routes[resource] = collection
 }
 
-func (h handler) ListenAndServe() {
+func (c connector) ListenAndServe() {
 	port := os.Getenv("PORT")
 	if port != "" {
 		log.Printf("$PORT=%s\n", port)
 	}
 	fmt.Println("Listening...")
-	http.ListenAndServe(port, h)
+	http.ListenAndServe(port, c)
 }
 
 func extractBody(r *http.Request) map[string]string {
@@ -109,10 +109,10 @@ func setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "PATCH")
 }
 
-func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (c connector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := extractMethod(r)
 	resource := extractResource(r)
-	collections, ok := h[method]
+	collections, ok := c[method]
 	if !ok && method == http.MethodOptions {
 		setCORSHeaders(w)
 		return
