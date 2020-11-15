@@ -11,9 +11,15 @@ import (
 )
 
 const (
+	k401 = "401" // Unauthorized
+	k409 = "409" // Conflict
+	k500 = "500" // Internal Server Error
+)
+
+const (
 	kbody = "body"
 	kcookies = "cookies"
-	klocator = "locator"
+	kidentifier = "identifier"
 	kmethod = "method"
 	kquery = "query"
 	kresource = "resource"
@@ -48,6 +54,10 @@ func (c connector) ListenAndServe() {
 	http.ListenAndServe(port, c)
 }
 
+func createContext(r *http.Request) context.Context {
+	return r.Context()
+}
+
 func extractBody(r *http.Request) map[string]string {
 	bodyParams := make(map[string]string)
 	json.NewDecoder(r.Body).Decode(&bodyParams)
@@ -62,7 +72,7 @@ func extractCookies(r *http.Request) map[string]string {
 	return cookies
 }
 
-func extractLocator(r *http.Request) string {
+func extractIdentifier(r *http.Request) string {
 	path := strings.Split(r.URL.Path, "/")
 	if len(path) < 3 {
 		return ""
@@ -92,8 +102,8 @@ func parseRequest(ctx context.Context, r *http.Request) context.Context {
 	ctx = context.WithValue(ctx, kbody, body)
 	cookies := extractCookies(r)
 	ctx = context.WithValue(ctx, kcookies, cookies)
-	locator := extractLocator(r)
-	ctx = context.WithValue(ctx, klocator, locator)
+	identifier := extractIdentifier(r)
+	ctx = context.WithValue(ctx, kidentifier, identifier)
 	method := extractMethod(r)
 	ctx = context.WithValue(ctx, kmethod, method)
 	query := extractQuery(r)
@@ -101,6 +111,39 @@ func parseRequest(ctx context.Context, r *http.Request) context.Context {
 	resource := extractResource(r)
 	ctx = context.WithValue(ctx, kresource, resource)
 	return ctx
+}
+
+func handleErrors(w http.ResponseWriter) {
+	switch r := recover(); r {
+	case k401:
+		send401(w)
+	case k409:
+		send409(w)
+	case k500:
+		send500(w)
+	}
+}
+
+func logError(status string) {
+	log.Println(status)
+}
+
+func send401(w http.ResponseWriter) {
+	status := http.StatusText(http.StatusUnauthorized)
+	logError(status)
+	http.Error(w, status, http.StatusUnauthorized)
+}
+
+func send409(w http.ResponseWriter) {
+	status := http.StatusText(http.StatusConflict)
+	logError(status)
+	http.Error(w, status, http.StatusConflict)
+}
+
+func send500(w http.ResponseWriter) {
+	status := http.StatusText(http.StatusInternalServerError)
+	logError(status)
+	http.Error(w, status, http.StatusInternalServerError)
 }
 
 func setCORSHeaders(w http.ResponseWriter) {
@@ -126,8 +169,9 @@ func (c connector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setCORSHeaders(w)
-	ctx := r.Context()
+	ctx := createContext(r)
 	ctx = parseRequest(ctx, r)
+	defer handleErrors(w)
 	for _, procedure := range collection {
 		ctx = procedure.Do(ctx, w)
 	}
