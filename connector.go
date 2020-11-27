@@ -58,8 +58,8 @@ func createContext(r *http.Request) context.Context {
 	return r.Context()
 }
 
-func extractBody(r *http.Request) map[string]string {
-	bodyParams := make(map[string]string)
+func extractBody(r *http.Request) map[string]interface{} {
+	bodyParams := make(map[string]interface{})
 	json.NewDecoder(r.Body).Decode(&bodyParams)
 	return bodyParams
 }
@@ -84,8 +84,8 @@ func extractMethod(r *http.Request) string {
 	return r.Method
 }
 
-func extractQuery(r *http.Request) map[string]string {
-	queryParams := make(map[string]string)
+func extractQuery(r *http.Request) map[string]interface{} {
+	queryParams := make(map[string]interface{})
 	query := r.URL.Query()
 	for key, _ := range query {
 		queryParams[key] = query.Get(key)
