@@ -113,14 +113,20 @@ func parseRequest(ctx context.Context, r *http.Request) context.Context {
 	return ctx
 }
 
-func handleErrors(w http.ResponseWriter) {
-	switch r := recover(); r {
+func catchErrors(w http.ResponseWriter) {
+	err := recover()
+	if err == nil {
+		return
+	}
+	switch err {
 	case k401:
 		send401(w)
 	case k409:
 		send409(w)
 	case k500:
 		send500(w)
+	default:
+    fmt.Println(err)
 	}
 }
 
@@ -149,7 +155,7 @@ func send500(w http.ResponseWriter) {
 func setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
-	w.Header().Set("Access-Control-Allow-Methods", "PATCH")
+	w.Header().Set("Access-Control-Allow-Methods", "DELETE, PATCH")
 }
 
 func (c connector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +177,7 @@ func (c connector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	setCORSHeaders(w)
 	ctx := createContext(r)
 	ctx = parseRequest(ctx, r)
-	defer handleErrors(w)
+	defer catchErrors(w)
 	for _, procedure := range collection {
 		ctx = procedure.Do(ctx, w)
 	}
