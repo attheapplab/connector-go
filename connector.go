@@ -51,7 +51,7 @@ func (c connector) ListenAndServe() {
 		log.Printf("$PORT=%s\n", port)
 	}
 	fmt.Println("Listening...")
-	http.ListenAndServe(port, c)
+	http.ListenAndServe(":" + port, c)
 }
 
 func createContext(r *http.Request) context.Context {
