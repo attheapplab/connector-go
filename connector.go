@@ -26,6 +26,7 @@ const (
 )
 
 const (
+	kENVIRONMENT = "ENVIRONMENT"
 	kPORT = "PORT"
 )
 
@@ -156,10 +157,32 @@ func send500(w http.ResponseWriter) {
 	http.Error(w, status, http.StatusInternalServerError)
 }
 
-func setCORSHeaders(w http.ResponseWriter) {
+func setAccessControlAllowCredentials(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
+}
+
+func setAccessControlAllowOrigin(w http.ResponseWriter) {
+	var protocol string
+	var hostname string
+	if environment := os.Getenv(kENVIRONMENT); environment != "production" {
+		protocol = "http"
+		hostname = "localhost:8000"
+	} else {
+		protocol = "https"
+		hostname = "attheapplab.github.io" // WIP
+	}
+	origin := protocol + "://" + hostname
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+}
+
+func setAccessControlAllowMethods(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "DELETE, PATCH")
+}
+
+func setCORSHeaders(w http.ResponseWriter) {
+	setAccessControlAllowCredentials(w)
+	setAccessControlAllowOrigin(w)
+	setAccessControlAllowMethods(w)
 }
 
 func (c connector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
