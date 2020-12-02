@@ -25,6 +25,10 @@ const (
 	kresource = "resource"
 )
 
+const (
+	kPORT = "PORT"
+)
+
 type procedure interface {
 	Do(context.Context, http.ResponseWriter) context.Context
 }
@@ -46,12 +50,12 @@ func (c connector) Handle(method string, resource string, collection ...procedur
 }
 
 func (c connector) ListenAndServe() {
-	port := os.Getenv("PORT")
-	if port != "" {
-		log.Printf("$PORT=%s\n", port)
+	var addr string
+	if port, ok := os.LookupEnv(kPORT); ok {
+		addr = ":" + port
 	}
-	fmt.Println("Listening...")
-	http.ListenAndServe(":" + port, c)
+	fmt.Println("Listening...", addr)
+	http.ListenAndServe(addr, c)
 }
 
 func createContext(r *http.Request) context.Context {
