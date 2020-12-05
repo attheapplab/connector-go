@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -17,46 +16,28 @@ const (
 )
 
 const (
-	kbody = "body"
-	kcookies = "cookies"
+	kbody       = "body"
+	kcookies    = "cookies"
 	kidentifier = "identifier"
-	kmethod = "method"
-	kquery = "query"
-	kresource = "resource"
-)
-
-const (
-	kENVIRONMENT = "ENVIRONMENT"
-	kPORT = "PORT"
+	kmethod     = "method"
+	kquery      = "query"
+	kresource   = "resource"
 )
 
 type procedure interface {
 	Do(context.Context, http.ResponseWriter) context.Context
 }
 
-type connector map[string]map[string][]procedure
-
-func New() *connector {
-	return &connector{}
+type Handler struct {
+	origin string
+	port   string
+	tree   map[string]map[string][]procedure
 }
 
-func (c connector) Handle(method string, resource string, collection ...procedure) {
-	routes, ok := c[method]
-	if !ok {
-		c[method] = make(map[string][]procedure)
-		c.Handle(method, resource, collection...)
-		return
+func New() *Handler {
+	return &Handler{
+		tree: make(map[string]map[string][]procedure),
 	}
-	routes[resource] = collection
-}
-
-func (c connector) ListenAndServe() {
-	var addr string
-	if port, ok := os.LookupEnv(kPORT); ok {
-		addr = ":" + port
-	}
-	fmt.Println("Listening...", addr)
-	http.ListenAndServe(addr, c)
 }
 
 func createContext(r *http.Request) context.Context {
@@ -131,7 +112,7 @@ func catchErrors(w http.ResponseWriter) {
 	case k500:
 		send500(w)
 	default:
-    fmt.Println(err)
+		fmt.Println(err)
 	}
 }
 
@@ -157,40 +138,32 @@ func send500(w http.ResponseWriter) {
 	http.Error(w, status, http.StatusInternalServerError)
 }
 
-func setAccessControlAllowCredentials(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-}
-
-func setAccessControlAllowOrigin(w http.ResponseWriter) {
-	var protocol string
-	var hostname string
-	if environment := os.Getenv(kENVIRONMENT); environment != "production" {
-		protocol = "http"
-		hostname = "localhost:8000"
-	} else {
-		protocol = "https"
-		hostname = "attheapplab.github.io" // WIP
+func (h *Handler) Handle(method string, resource string, collection ...procedure) {
+	routes, ok := h.tree[method]
+	if !ok {
+		h.tree[method] = make(map[string][]procedure)
+		h.Handle(method, resource, collection...)
+		return
 	}
-	origin := protocol + "://" + hostname
-	w.Header().Set("Access-Control-Allow-Origin", origin)
+	routes[resource] = collection
 }
 
-func setAccessControlAllowMethods(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Methods", "DELETE, PATCH")
+func (h *Handler) ListenAndServe() {
+	fmt.Println("Listening...")
+	http.ListenAndServe(h.port, h)
 }
 
-func setCORSHeaders(w http.ResponseWriter) {
-	setAccessControlAllowCredentials(w)
-	setAccessControlAllowOrigin(w)
-	setAccessControlAllowMethods(w)
+func (h *Handler) ListenAndServeTLS(certfile string, keyfile string) {
+	fmt.Println("Listening on TLS...")
+	http.ListenAndServeTLS(h.port, certfile, keyfile, h)
 }
 
-func (c connector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := extractMethod(r)
 	resource := extractResource(r)
-	collections, ok := c[method]
+	collections, ok := h.tree[method]
 	if !ok && method == http.MethodOptions {
-		setCORSHeaders(w)
+		h.setCORSHeaders(w)
 		return
 	} else if !ok {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
@@ -201,11 +174,37 @@ func (c connector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	setCORSHeaders(w)
+	h.setCORSHeaders(w)
 	ctx := createContext(r)
 	ctx = parseRequest(ctx, r)
 	defer catchErrors(w)
 	for _, procedure := range collection {
 		ctx = procedure.Do(ctx, w)
 	}
+}
+
+func (h *Handler) setAccessControlAllowCredentials(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+}
+
+func (h *Handler) setAccessControlAllowMethods(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Methods", "DELETE, PATCH")
+}
+
+func (h *Handler) setAccessControlAllowOrigin(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", h.origin)
+}
+
+func (h *Handler) setCORSHeaders(w http.ResponseWriter) {
+	h.setAccessControlAllowCredentials(w)
+	h.setAccessControlAllowOrigin(w)
+	h.setAccessControlAllowMethods(w)
+}
+
+func (h *Handler) SetAccessControlOrigin(origin string) {
+	h.origin = origin
+}
+
+func (h *Handler) SetPort(port string) {
+	h.port = port
 }
