@@ -24,6 +24,13 @@ const (
 	kresource   = "resource"
 )
 
+const (
+	kDELETE = "DELETE"
+	kGET = "GET"
+	kPATCH = "PATCH"
+	kPOST = "POST"
+)
+
 type procedure interface {
 	Do(context.Context, http.ResponseWriter) context.Context
 }
@@ -31,23 +38,23 @@ type procedure interface {
 type Handler struct {
 	origin string
 	port   string
-	tree   map[string]map[string][]procedure
+	tree   map[string]*node
 }
 
 func New() *Handler {
 	return &Handler{
-		tree: make(map[string]map[string][]procedure),
+		tree: make(map[string]*node),
 	}
-}
-
-func createContext(r *http.Request) context.Context {
-	return r.Context()
 }
 
 func extractBody(r *http.Request) map[string]interface{} {
 	bodyParams := make(map[string]interface{})
 	json.NewDecoder(r.Body).Decode(&bodyParams)
 	return bodyParams
+}
+
+func extractContext(r *http.Request) context.Context {
+	return r.Context()
 }
 
 func extractCookies(r *http.Request) map[string]string {
@@ -138,14 +145,44 @@ func send500(w http.ResponseWriter) {
 	http.Error(w, status, http.StatusInternalServerError)
 }
 
-func (h *Handler) Handle(method string, resource string, collection ...procedure) {
-	routes, ok := h.tree[method]
+func isPath(path string) bool {
+	return len(path) > 0 && path[0:1] == "/"
+}
+
+func splitPath(path string) []string {
+	return strings.Split(path, "/")[1:]
+}
+
+func (h *Handler) Handle(method string, path string, procedures ...procedure) {
+	if !isPath(path) {
+		panic(path)
+	}
+	root, ok := h.tree[method]
 	if !ok {
-		h.tree[method] = make(map[string][]procedure)
-		h.Handle(method, resource, collection...)
+		root := &node{}
+		h.tree[method] = root
+		h.Handle(method, path, procedures...)
 		return
 	}
-	routes[resource] = collection
+	segments := splitPath(path)
+	node, next := root.traverse(segments)
+	node.add(next, procedures)
+}
+
+func (h *Handler) Delete(path string, procedures ...procedure) {
+	h.Handle(kDELETE, path, procedures...)
+}
+
+func (h *Handler) Get(path string, procedures ...procedure) {
+	h.Handle(kGET, path, procedures...)
+}
+
+func (h *Handler) Patch(path string, procedures ...procedure) {
+	h.Handle(kPATCH, path, procedures...)
+}
+
+func (h *Handler) Post(path string, procedures ...procedure) {
+	h.Handle(kPOST, path, procedures...)
 }
 
 func (h *Handler) ListenAndServe() {
@@ -158,27 +195,26 @@ func (h *Handler) ListenAndServeTLS(certfile string, keyfile string) {
 	http.ListenAndServeTLS(h.port, certfile, keyfile, h)
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	method := extractMethod(r)
-	resource := extractResource(r)
-	collections, ok := h.tree[method]
-	if !ok && method == http.MethodOptions {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {	
+	nodes, ok := h.tree[r.Method]
+	if !ok && r.Method == http.MethodOptions {
 		h.setCORSHeaders(w)
 		return
 	} else if !ok {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	collection, ok := collections[resource]
-	if !ok {
+	segments := splitPath(r.URL.Path)
+	node, _ := nodes.traverse(segments)
+	if !node.isMatch {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
 	h.setCORSHeaders(w)
-	ctx := createContext(r)
+	ctx := extractContext(r)
 	ctx = parseRequest(ctx, r)
 	defer catchErrors(w)
-	for _, procedure := range collection {
+	for _, procedure := range node.procedures {
 		ctx = procedure.Do(ctx, w)
 	}
 }
