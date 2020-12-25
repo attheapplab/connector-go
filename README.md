@@ -9,7 +9,7 @@ Define your routes using HTTP verbs (Delete, Get, Patch, Post) and a variable nu
 ```golang
 func main() {
     conn := connector.New()
-   	conn.Delete("/", DeleteHandler)
+    conn.Delete("/", DeleteHandler)
     conn.Get("/", GetHandler)
     conn.Patch("/", PatchHandler)
     conn.Post("/", PostHandler)
