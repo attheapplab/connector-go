@@ -35,14 +35,14 @@ type procedure interface {
 	Do(context.Context, http.ResponseWriter) context.Context
 }
 
-type Handler struct {
+type Router struct {
 	origin string
 	port   string
 	tree   map[string]*node
 }
 
-func New() *Handler {
-	return &Handler{
+func New() *Router {
+	return &Router{
 		tree: make(map[string]*node),
 	}
 }
@@ -153,15 +153,15 @@ func splitPath(path string) []string {
 	return strings.Split(path, "/")[1:]
 }
 
-func (h *Handler) Handle(method string, path string, procedures ...procedure) {
+func (r *Router) Handle(method string, path string, procedures ...procedure) {
 	if !isPath(path) {
 		panic(path)
 	}
-	root, ok := h.tree[method]
+	root, ok := r.tree[method]
 	if !ok {
 		root := &node{}
-		h.tree[method] = root
-		h.Handle(method, path, procedures...)
+		r.tree[method] = root
+		r.Handle(method, path, procedures...)
 		return
 	}
 	segments := splitPath(path)
@@ -169,78 +169,78 @@ func (h *Handler) Handle(method string, path string, procedures ...procedure) {
 	node.add(next, procedures)
 }
 
-func (h *Handler) Delete(path string, procedures ...procedure) {
-	h.Handle(kDELETE, path, procedures...)
+func (r *Router) Delete(path string, procedures ...procedure) {
+	r.Handle(kDELETE, path, procedures...)
 }
 
-func (h *Handler) Get(path string, procedures ...procedure) {
-	h.Handle(kGET, path, procedures...)
+func (r *Router) Get(path string, procedures ...procedure) {
+	r.Handle(kGET, path, procedures...)
 }
 
-func (h *Handler) Patch(path string, procedures ...procedure) {
-	h.Handle(kPATCH, path, procedures...)
+func (r *Router) Patch(path string, procedures ...procedure) {
+	r.Handle(kPATCH, path, procedures...)
 }
 
-func (h *Handler) Post(path string, procedures ...procedure) {
-	h.Handle(kPOST, path, procedures...)
+func (r *Router) Post(path string, procedures ...procedure) {
+	r.Handle(kPOST, path, procedures...)
 }
 
-func (h *Handler) ListenAndServe() {
+func (r *Router) ListenAndServe() {
 	fmt.Println("Listening...")
-	http.ListenAndServe(h.port, h)
+	http.ListenAndServe(r.port, r)
 }
 
-func (h *Handler) ListenAndServeTLS(certfile string, keyfile string) {
+func (r *Router) ListenAndServeTLS(certfile string, keyfile string) {
 	fmt.Println("Listening on TLS...")
-	http.ListenAndServeTLS(h.port, certfile, keyfile, h)
+	http.ListenAndServeTLS(r.port, certfile, keyfile, r)
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {	
-	nodes, ok := h.tree[r.Method]
-	if !ok && r.Method == http.MethodOptions {
-		h.setCORSHeaders(w)
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {	
+	nodes, ok := r.tree[req.Method]
+	if !ok && req.Method == http.MethodOptions {
+		r.setCORSHeaders(w)
 		return
 	} else if !ok {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	segments := splitPath(r.URL.Path)
+	segments := splitPath(req.URL.Path)
 	node, _ := nodes.traverse(segments)
 	if !node.isMatch {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	h.setCORSHeaders(w)
-	ctx := extractContext(r)
-	ctx = parseRequest(ctx, r)
+	r.setCORSHeaders(w)
+	ctx := extractContext(req)
+	ctx = parseRequest(ctx, req)
 	defer catchErrors(w)
 	for _, procedure := range node.procedures {
 		ctx = procedure.Do(ctx, w)
 	}
 }
 
-func (h *Handler) setAccessControlAllowCredentials(w http.ResponseWriter) {
+func (r *Router) setAccessControlAllowCredentials(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 }
 
-func (h *Handler) setAccessControlAllowMethods(w http.ResponseWriter) {
+func (r *Router) setAccessControlAllowMethods(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "DELETE, PATCH")
 }
 
-func (h *Handler) setAccessControlAllowOrigin(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", h.origin)
+func (r *Router) setAccessControlAllowOrigin(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", r.origin)
 }
 
-func (h *Handler) setCORSHeaders(w http.ResponseWriter) {
-	h.setAccessControlAllowCredentials(w)
-	h.setAccessControlAllowOrigin(w)
-	h.setAccessControlAllowMethods(w)
+func (r *Router) setCORSHeaders(w http.ResponseWriter) {
+	r.setAccessControlAllowCredentials(w)
+	r.setAccessControlAllowOrigin(w)
+	r.setAccessControlAllowMethods(w)
 }
 
-func (h *Handler) SetAccessControlOrigin(origin string) {
-	h.origin = origin
+func (r *Router) SetAccessControlOrigin(origin string) {
+	r.origin = origin
 }
 
-func (h *Handler) SetPort(port string) {
-	h.port = port
+func (r *Router) SetPort(port string) {
+	r.port = port
 }
