@@ -5,11 +5,11 @@ import (
 )
 
 type node struct {
-	children []*node
+	children     []*node
 	isIdentifier bool
-	isMatch bool
-	name string
-	procedures []procedure
+	isMatch      bool
+	name         string
+	procedures   []procedure
 }
 
 func (n *node) traverse(segments []string) (*node, []string) {
@@ -32,7 +32,7 @@ func (n *node) add(segments []string, procedures []procedure) {
 	isIdentifier, _ := regexp.MatchString("{([a-z]+)}", segment)
 	newNode := &node{
 		isIdentifier: isIdentifier,
-		name: segment,
+		name:         segment,
 	}
 	n.children = append(n.children, newNode)
 	next := segments[1:]

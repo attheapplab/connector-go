@@ -26,9 +26,9 @@ const (
 
 const (
 	kDELETE = "DELETE"
-	kGET = "GET"
-	kPATCH = "PATCH"
-	kPOST = "POST"
+	kGET    = "GET"
+	kPATCH  = "PATCH"
+	kPOST   = "POST"
 )
 
 type procedure interface {
@@ -36,13 +36,18 @@ type procedure interface {
 }
 
 type Router struct {
-	origin string
-	port   string
-	tree   map[string]*node
+	ch            *cors
+	listeningPort string
+	tree          map[string]*node
 }
 
 func New() *Router {
 	return &Router{
+		ch: &cors{
+			allowedMethods:   defaultCorsMethods,
+			allowedOrigins:   defaultCorsOrigins,
+			optionStatusCode: defaultCorsOptionStatusCode,
+		},
 		tree: make(map[string]*node),
 	}
 }
@@ -186,31 +191,31 @@ func (r *Router) Post(path string, procedures ...procedure) {
 }
 
 func (r *Router) ListenAndServe() {
+	handler := r.UseCORS()
 	fmt.Println("Listening...")
-	http.ListenAndServe(r.port, r)
+	http.ListenAndServe(r.listeningPort, handler)
 }
 
 func (r *Router) ListenAndServeTLS(certfile string, keyfile string) {
+	handler := r.UseCORS()
 	fmt.Println("Listening on TLS...")
-	http.ListenAndServeTLS(r.port, certfile, keyfile, r)
+	http.ListenAndServeTLS(r.listeningPort, certfile, keyfile, handler)
 }
 
-func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {	
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	nodes, ok := r.tree[req.Method]
-	if !ok && req.Method == http.MethodOptions {
-		r.setCORSHeaders(w)
-		return
-	} else if !ok {
+	if !ok {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
+
 	segments := splitPath(req.URL.Path)
 	node, _ := nodes.traverse(segments)
 	if !node.isMatch {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	r.setCORSHeaders(w)
+
 	ctx := extractContext(req)
 	ctx = parseRequest(ctx, req)
 	defer catchErrors(w)
@@ -219,28 +224,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Router) setAccessControlAllowCredentials(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-}
-
-func (r *Router) setAccessControlAllowMethods(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Methods", "DELETE, PATCH")
-}
-
-func (r *Router) setAccessControlAllowOrigin(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", r.origin)
-}
-
-func (r *Router) setCORSHeaders(w http.ResponseWriter) {
-	r.setAccessControlAllowCredentials(w)
-	r.setAccessControlAllowOrigin(w)
-	r.setAccessControlAllowMethods(w)
-}
-
-func (r *Router) SetAccessControlOrigin(origin string) {
-	r.origin = origin
-}
-
-func (r *Router) SetPort(port string) {
-	r.port = port
+func (r *Router) SetListeningPort(listeningPort string) {
+	r.listeningPort = listeningPort
 }

@@ -73,6 +73,7 @@ Examples of public middleware and handlers:
 package main
 
 import (
+	"context"
 	"github.com/attheapplab/connector-go"
 	"net/http"
 )
@@ -108,6 +109,26 @@ func main() {
 	conn.Post("fifth", mw1, mw2, mw3)
 	conn.Delete("sixth", mw1, mw2, mw3)
 	
+	// Start the server.
+	conn.ListenAndServe()
+}
+
+```
+
+## CORS
+
+```golang
+func main() {
+	// Create a new instance of Connector.
+	conn := connector.New()
+	
+	// If you want to enable cross-origin requests, set the CORS headers you need:
+	conn.AllowCredentials()
+	conn.AllowMethods("DELETE", "PATCH")
+	conn.AllowOrigins("*")
+	
+	// ...
+
 	// Start the server.
 	conn.ListenAndServe()
 }
