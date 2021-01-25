@@ -15,6 +15,7 @@ const (
 	k500 = "500" // Internal Server Error
 )
 
+// Write to context:
 const (
 	kbody       = "body"
 	kcookies    = "cookies"
@@ -95,19 +96,43 @@ func extractResource(r *http.Request) string {
 	return strings.Split(r.URL.Path, "/")[1]
 }
 
+func writeBody(ctx context.Context, body map[string]interface{}) context.Context {
+	return context.WithValue(ctx, kbody, body)
+}
+
+func writeCookies(ctx context.Context, cookies map[string]string) context.Context {
+	return context.WithValue(ctx, kcookies, cookies)
+}
+
+func writeIdentifier(ctx context.Context, identifier string) context.Context {
+	return context.WithValue(ctx, kidentifier, identifier)
+}
+
+func writeMethod(ctx context.Context, method string) context.Context {
+	return context.WithValue(ctx, kmethod, method)
+}
+
+func writeQuery(ctx context.Context, query map[string]interface{}) context.Context {
+	return context.WithValue(ctx, kquery, query)
+}
+
+func writeResource(ctx context.Context, resource string) context.Context {
+	return context.WithValue(ctx, kresource, resource)
+}
+
 func parseRequest(ctx context.Context, r *http.Request) context.Context {
 	body := extractBody(r)
-	ctx = context.WithValue(ctx, kbody, body)
+	ctx = writeBody(ctx, body)
 	cookies := extractCookies(r)
-	ctx = context.WithValue(ctx, kcookies, cookies)
+	ctx = writeCookies(ctx, cookies)
 	identifier := extractIdentifier(r)
-	ctx = context.WithValue(ctx, kidentifier, identifier)
+	ctx = writeIdentifier(ctx, identifier)
 	method := extractMethod(r)
-	ctx = context.WithValue(ctx, kmethod, method)
+	ctx = writeMethod(ctx, method)
 	query := extractQuery(r)
-	ctx = context.WithValue(ctx, kquery, query)
+	ctx = writeQuery(ctx, query)
 	resource := extractResource(r)
-	ctx = context.WithValue(ctx, kresource, resource)
+	ctx = writeResource(ctx, resource)
 	return ctx
 }
 
