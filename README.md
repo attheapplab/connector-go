@@ -64,8 +64,8 @@ func (g *greeter) Do(ctx context.Context, w http.ResponseWriter) context.Context
 
 Examples of public middleware and handlers:
 
-- [**Logger**](https://github.com/attheapplab/logger-go) to log incoming HTTP requests.
 - [**Postregd**](https://github.com/attheapplab/postregd-go) to sign-up (insert) users in a PostgreSQL database.
+- [**Stdouter**](https://github.com/attheapplab/stdouter-go) to log incoming HTTP requests.
 
 ## Hello World Example
 
